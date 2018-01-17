@@ -1,0 +1,112 @@
+module.exports = function(socket, db,hasher){
+
+ var users = db.collection('users');
+
+ socket.on("login", function(data){
+  var rep = new Object();
+  rep.status = false;
+  users.findOne({"mail":data.mail, "pass":data.pass}, function(err, res){
+   if (res){
+     rep.token = res._id;
+     rep.id = hasher(rep.token.toString(),2147483645);
+     console.log("id : " + rep.id);
+     rep.status = true;
+     rep.user = res;
+     socket._mid = res._id;
+     socket.join(res.mail);
+   }
+   console.dir(rep);
+   socket.emit("login", rep);
+ })
+});
+
+   /*
+   * data.token = id user data.friends = adresse mail de l'ami
+   * si false l'ami n'existe pas dans la bdd
+   */
+   socket.on("AddFriend", function(data){
+    var rep = new Object();
+    rep.status = false;
+    users.findOne({mail:data.friend}, function(err, res){
+      if (res){
+         rep.status = true;
+         users.update({_id:ObjectId(data.token)},{ $push: { friends: data.friend } });
+      }
+      socket.emit("AddFriend", rep);
+    })
+
+  })
+
+  /*
+   * data = token user
+   */
+   socket.on("GetFriend", function(data){
+     var rep = new Object();
+    rep.status = false;
+    users.findOne({_id:ObjectId(data)}, function(err, res){
+      if(res){
+         rep.friends = res.friends
+         rep.status = true;
+         socket.emit("GetFriend", rep);
+      }
+    })
+  })
+
+   socket.on("GetUser", function(data){
+    console.log("=======================getuser===============");
+    var rep = new Object();
+    rep.status = false;
+    users.findOne({_id:ObjectId(data)}, function(err, res){
+     if (res){
+      rep.token = res._id;
+      rep.id = hasher(rep.token.toString(),2147483645);
+      rep.status = true;
+      rep.user = res;
+      socket._mid = res._id;
+      socket.join(res.mail);
+    }
+    console.dir(rep);
+    socket.emit("GetUser", rep);
+  })
+  });
+
+   socket.on("GetRooms", function(data){
+    var rep = new Object();
+    rep.status = false;
+    console.log(data);
+    users.findOne({_id:ObjectId(data)}, function(err, res){
+     if (res){
+      rep.status = true;
+      rep.rooms = res.rooms;
+      for(var i= 0; i < res.rooms.length; i++){
+       console.log(data + " (join room) --> " + res.rooms[i])
+       socket.join(res.rooms[i]);
+     }
+   }
+   console.dir(res);
+   socket.emit("GetRooms", rep);
+ })
+  });
+
+   socket.on("register", function(data){
+    users.findOne({"mail":data.mail}, function(err, ress){
+     var rep = new Object();
+     rep.status = false;
+     if (ress == null){
+      users.insert({"name":data.name, "surname":data.surname, "mail":data.mail, "pass":data.pass, "rooms":[], "friends":[] , "date": new Date()}, function(err, res){
+       rep.token = res.insertedIds[0];
+       rep.id = hasher(rep.token,2147483645);
+       rep.status = true;
+       socket.emit("register", rep);
+       socket.join(data.mail);
+       console.dir(res.insertedIds); 
+     });
+    } else {
+      console.log("already register mail");
+      socket.emit("register", rep);
+    }
+  });
+
+
+  });
+ }
